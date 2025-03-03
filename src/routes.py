@@ -3,6 +3,8 @@ import os
 from flask import Blueprint, request, jsonify
 from firebase_admin import auth
 import json
+import uuid
+from datetime import datetime, timedelta
 
 # Add the parent directory to sys.path to fix imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -740,3 +742,238 @@ def create_company():
     except Exception as e:
         print(f"Error creating company: {e}")
         return jsonify({'error': f'Error creating company: {str(e)}'}), 500
+
+# New API endpoint to create an invitation
+@api.route('/invitations', methods=['POST'])
+def create_invitation():
+    """Create a new invitation for a company."""
+    # Get the authorization header
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({"error": "Authorization header is required"}), 401
+    
+    # Verify the token and get user info
+    user_info = get_user_from_token(auth_header)
+    if not user_info:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Check if user is an admin
+    if not is_admin(user_info):
+        return jsonify({"error": "Admin privileges required"}), 403
+    
+    # Get the request data
+    data = request.json
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+    
+    # Validate required fields
+    required_fields = ['code', 'companyId', 'companyName', 'expiryDate']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({"error": f"Missing required field: {field}"}), 400
+    
+    # Parse expiry date
+    from datetime import timezone
+    try:
+        if isinstance(data['expiryDate'], str):
+            # Parse the string to a datetime object with timezone info
+            expiry_date = datetime.fromisoformat(data['expiryDate'].replace('Z', '+00:00'))
+            # Ensure it has timezone info
+            if expiry_date.tzinfo is None:
+                expiry_date = expiry_date.replace(tzinfo=timezone.utc)
+        else:
+            expiry_date = data['expiryDate']
+            # Ensure it has timezone info
+            if expiry_date.tzinfo is None:
+                expiry_date = expiry_date.replace(tzinfo=timezone.utc)
+    except ValueError as e:
+        print(f"Error parsing expiry date: {e}")
+        return jsonify({"error": f"Invalid expiry date format: {str(e)}"}), 400
+    
+    # Get current time with timezone
+    now_with_tz = datetime.now(timezone.utc)
+    
+    # Create the invitation document
+    invitation_data = {
+        'code': data['code'],
+        'companyId': data['companyId'],
+        'companyName': data['companyName'],
+        'expiryDate': expiry_date,
+        'createdAt': now_with_tz,
+        'createdBy': user_info['uid'],
+        'used': False
+    }
+    
+    try:
+        # Add the invitation to Firestore
+        invitation_ref = db.collection('invitations').document(data['code'])
+        invitation_ref.set(invitation_data)
+        
+        return jsonify({"success": True, "code": data['code']}), 201
+    except Exception as e:
+        import traceback
+        print(f"Error creating invitation: {e}")
+        print(traceback.format_exc())  # Print the full traceback for debugging
+        return jsonify({"error": f"Failed to create invitation: {str(e)}"}), 500
+
+# API endpoint to get an invitation by code
+@api.route('/invitations/<code>', methods=['GET'])
+def get_invitation(code):
+    """Get an invitation by its code."""
+    try:
+        # Get the invitation from Firestore
+        invitation_ref = db.collection('invitations').document(code)
+        invitation = invitation_ref.get()
+        
+        if not invitation.exists:
+            return jsonify({"error": "Invitation not found"}), 404
+        
+        invitation_data = invitation.to_dict()
+        
+        # Convert Firestore timestamp to ISO format for JSON serialization
+        if 'expiryDate' in invitation_data:
+            if hasattr(invitation_data['expiryDate'], 'isoformat'):
+                # Ensure it has timezone info before converting to string
+                from datetime import timezone
+                expiry_date = invitation_data['expiryDate']
+                if expiry_date.tzinfo is None:
+                    expiry_date = expiry_date.replace(tzinfo=timezone.utc)
+                invitation_data['expiryDate'] = expiry_date.isoformat()
+        
+        if 'createdAt' in invitation_data:
+            if hasattr(invitation_data['createdAt'], 'isoformat'):
+                # Ensure it has timezone info before converting to string
+                created_at = invitation_data['createdAt']
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=timezone.utc)
+                invitation_data['createdAt'] = created_at.isoformat()
+        
+        if 'usedAt' in invitation_data:
+            if hasattr(invitation_data['usedAt'], 'isoformat'):
+                # Ensure it has timezone info before converting to string
+                used_at = invitation_data['usedAt']
+                if used_at.tzinfo is None:
+                    used_at = used_at.replace(tzinfo=timezone.utc)
+                invitation_data['usedAt'] = used_at.isoformat()
+        
+        return jsonify(invitation_data), 200
+    except Exception as e:
+        import traceback
+        print(f"Error getting invitation: {e}")
+        print(traceback.format_exc())  # Print the full traceback for debugging
+        return jsonify({"error": f"Failed to get invitation: {str(e)}"}), 500
+
+# API endpoint to use an invitation
+@api.route('/invitations/<code>/use', methods=['POST'])
+def use_invitation(code):
+    """Mark an invitation as used and add the user to the company."""
+    # Get the authorization header
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({"error": "Authorization header is required"}), 401
+    
+    # Verify the token and get user info
+    user_info = get_user_from_token(auth_header)
+    if not user_info:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Get the request data
+    data = request.json
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+    
+    # Validate required fields
+    required_fields = ['userId', 'email']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({"error": f"Missing required field: {field}"}), 400
+    
+    try:
+        # Get the invitation from Firestore
+        invitation_ref = db.collection('invitations').document(code)
+        invitation = invitation_ref.get()
+        
+        if not invitation.exists:
+            return jsonify({"error": "Invitation not found"}), 404
+        
+        invitation_data = invitation.to_dict()
+        
+        # Check if invitation is already used
+        if invitation_data.get('used', False):
+            return jsonify({"error": "This invitation has already been used"}), 400
+        
+        # Check if invitation is expired
+        expiry_date = invitation_data.get('expiryDate')
+        if expiry_date:
+            # Convert to datetime if it's a string
+            if isinstance(expiry_date, str):
+                try:
+                    expiry_date = datetime.fromisoformat(expiry_date.replace('Z', '+00:00'))
+                except ValueError:
+                    print(f"Error parsing expiry date: {expiry_date}")
+            
+            # Make sure we're comparing timezone-aware datetimes
+            from datetime import timezone
+            now = datetime.now(timezone.utc)
+            
+            # If expiry_date is naive (no timezone info), make it timezone-aware
+            if expiry_date.tzinfo is None:
+                expiry_date = expiry_date.replace(tzinfo=timezone.utc)
+                
+            # Now compare dates
+            if expiry_date < now:
+                return jsonify({"error": "This invitation has expired"}), 400
+        
+        # Get current time with timezone
+        now_with_tz = datetime.now(timezone.utc)
+        
+        # Mark the invitation as used
+        invitation_ref.update({
+            'used': True,
+            'usedBy': data['userId'],
+            'usedAt': now_with_tz,
+            'userEmail': data['email']
+        })
+        
+        # Add the user to the company
+        company_id = invitation_data.get('companyId')
+        if company_id:
+            # Check if the company exists
+            company_ref = db.collection('companies').document(company_id)
+            company = company_ref.get()
+            
+            if company.exists:
+                # Add the user to the company's user list
+                company_data = company.to_dict()
+                user_ids = company_data.get('user_ids', [])
+                if data['userId'] not in user_ids:
+                    user_ids.append(data['userId'])
+                    company_ref.update({'user_ids': user_ids})
+                
+                # Add the company to the user's company list
+                user_ref = db.collection('users').document(data['userId'])
+                user = user_ref.get()
+                
+                if user.exists:
+                    user_data = user.to_dict()
+                    company_ids = user_data.get('company_ids', [])
+                    if company_id not in company_ids:
+                        company_ids.append(company_id)
+                        user_ref.update({'company_ids': company_ids})
+                else:
+                    # Create a new user document if it doesn't exist
+                    user_ref.set({
+                        'uid': data['userId'],
+                        'email': data['email'],
+                        'display_name': data['email'].split('@')[0],
+                        'role': 'user',
+                        'company_ids': [company_id],
+                        'created_at': now_with_tz
+                    })
+        
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        import traceback
+        print(f"Error using invitation: {e}")
+        print(traceback.format_exc())  # Print the full traceback for debugging
+        return jsonify({"error": f"Failed to use invitation: {str(e)}"}), 500
