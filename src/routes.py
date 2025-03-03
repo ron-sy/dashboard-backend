@@ -13,12 +13,16 @@ from models import Company, OnboardingStep, OnboardingStatus, DEFAULT_ONBOARDING
 from models import User, UserRole
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+from services import MandrillEmailService
 
 # Create a Blueprint for API routes
 api = Blueprint('api', __name__)
 
 # Always use production Firebase, never use development mode
 DEV_MODE = False
+
+# Initialize Mandrill email service
+mandrill_service = MandrillEmailService()
 
 # Mock users for development mode
 MOCK_USERS = {
@@ -635,6 +639,15 @@ def update_onboarding_step(company_id, step_id):
         if 'status' not in data:
             return jsonify({'error': 'Status field is required'}), 400
         
+        # Check if email notification is requested
+        send_email = data.get('send_email', False)
+        template_name = data.get('template_name')
+        recipient_emails = data.get('recipient_emails', [])
+        
+        # Log the request data for debugging
+        print(f"Request data: {data}")
+        print(f"Send email: {send_email}, Template: {template_name}, Recipients: {recipient_emails}")
+        
         # Validate status
         try:
             new_status = OnboardingStatus(data['status'])
@@ -653,11 +666,14 @@ def update_onboarding_step(company_id, step_id):
         
         # Find and update the step
         step_found = False
+        updated_step = None
+        
         for step in company.onboarding_steps:
             if step.id == step_id:
                 step_found = True
                 step.status = new_status
                 step.updated_at = datetime.now()
+                updated_step = step
                 
                 # Update in Firestore
                 company_ref.update({
@@ -666,7 +682,145 @@ def update_onboarding_step(company_id, step_id):
                 
                 print(f"Admin {user_info.get('uid')} updated step {step_id} status to {new_status}")
                 
-                return jsonify(step.to_dict()), 200
+                # Send email notification if requested
+                if send_email and template_name and recipient_emails:
+                    try:
+                        print(f"Preparing to send email notification using template: {template_name}")
+                        
+                        # Get company users' email addresses if needed
+                        if 'all_company_users' in recipient_emails:
+                            company_users = []
+                            for user_id in company.user_ids:
+                                user_data = get_user_data(user_id)
+                                if user_data and user_data.email:
+                                    company_users.append({
+                                        'email': user_data.email,
+                                        'name': user_data.display_name or user_data.email.split('@')[0]
+                                    })
+                            
+                            if not company_users:
+                                print("No users found in the company to send emails to")
+                                return jsonify({
+                                    'step': updated_step.to_dict(),
+                                    'warning': 'Step updated but no company users found to send emails to'
+                                }), 200
+                                
+                            recipient_emails = company_users
+                            print(f"Sending to all company users: {recipient_emails}")
+                        else:
+                            # Format recipient emails for Mandrill
+                            recipient_emails = [
+                                {'email': email, 'name': email.split('@')[0]} 
+                                for email in recipient_emails
+                            ]
+                            print(f"Sending to specific recipients: {recipient_emails}")
+                        
+                        # Prepare merge variables
+                        global_merge_vars = [
+                            {'name': 'COMPANY_NAME', 'content': company.name},
+                            {'name': 'STEP_NAME', 'content': step.name},
+                            {'name': 'STEP_DESCRIPTION', 'content': step.description},
+                            {'name': 'STEP_STATUS', 'content': step.status.value},
+                            {'name': 'UPDATED_BY', 'content': user_info.get('name', 'Admin')},
+                            {'name': 'UPDATED_AT', 'content': step.updated_at.strftime('%Y-%m-%d %H:%M:%S')}
+                        ]
+                        
+                        # Send the email
+                        from_email = "ron@syntheticteams.com"
+                        from_name = os.environ.get('MANDRILL_FROM_NAME', 'Synthetic Teams')
+                        
+                        print(f"Sending email with from_email: {from_email}, from_name: {from_name}")
+                        
+                        # Check if Mandrill API key is set
+                        if not os.environ.get('MANDRILL_API_KEY'):
+                            print("MANDRILL_API_KEY is not set in environment variables")
+                            return jsonify({
+                                'step': updated_step.to_dict(),
+                                'error': 'Mandrill API key is not configured'
+                            }), 200
+                        
+                        try:
+                            response = mandrill_service.send_template_email(
+                                template_name=template_name,
+                                subject=f"Onboarding Step Update: {step.name}",
+                                from_email=from_email,
+                                from_name=from_name,
+                                to_emails=recipient_emails,
+                                global_merge_vars=global_merge_vars
+                            )
+                            
+                            # Check for rejected emails
+                            rejected_emails = [result for result in response if result.get('status') == 'rejected']
+                            if rejected_emails:
+                                rejected_info = []
+                                for rejected in rejected_emails:
+                                    rejected_info.append({
+                                        'email': rejected.get('email'),
+                                        'reason': rejected.get('reject_reason')
+                                    })
+                                
+                                # If all emails were rejected
+                                if len(rejected_emails) == len(recipient_emails):
+                                    error_message = "All emails were rejected. "
+                                    if any(r.get('reject_reason') == 'recipient-domain-mismatch' for r in rejected_emails):
+                                        error_message += "The recipient domains are not verified in your Mandrill account. "
+                                        error_message += "Please verify these domains in your Mandrill account settings or use email addresses with verified domains."
+                                    
+                                    print(f"Email sending failed: {error_message}")
+                                    print(f"Rejected emails: {rejected_info}")
+                                    
+                                    return jsonify({
+                                        'step': updated_step.to_dict(),
+                                        'email_sent': False,
+                                        'email_error': error_message,
+                                        'rejected_emails': rejected_info
+                                    }), 200
+                                else:
+                                    # Some emails were sent successfully
+                                    warning_message = f"{len(rejected_emails)} out of {len(recipient_emails)} emails were rejected. "
+                                    if any(r.get('reject_reason') == 'recipient-domain-mismatch' for r in rejected_emails):
+                                        warning_message += "Some recipient domains are not verified in your Mandrill account."
+                                    
+                                    print(f"Email sending partial success: {warning_message}")
+                                    print(f"Rejected emails: {rejected_info}")
+                                    
+                                    return jsonify({
+                                        'step': updated_step.to_dict(),
+                                        'email_sent': True,
+                                        'email_warning': warning_message,
+                                        'rejected_emails': rejected_info,
+                                        'recipients_count': len(recipient_emails) - len(rejected_emails)
+                                    }), 200
+                            
+                            print(f"Email notification sent to {len(recipient_emails)} recipients")
+                            print(f"Mandrill API response: {response}")
+                            
+                            return jsonify({
+                                'step': updated_step.to_dict(),
+                                'email_sent': True,
+                                'recipients_count': len(recipient_emails)
+                            }), 200
+                        except ValueError as e:
+                            error_message = str(e)
+                            if "recipient-domain-mismatch" in error_message:
+                                error_message = "The recipient domains are not verified in your Mandrill account. Please verify these domains in Mandrill settings or use email addresses with verified domains."
+                            
+                            print(f"Error sending email notification: {error_message}")
+                            return jsonify({
+                                'step': updated_step.to_dict(),
+                                'email_sent': False,
+                                'email_error': error_message
+                            }), 200
+                    except Exception as e:
+                        print(f"Error sending email notification: {str(e)}")
+                        # Return success for the step update but include the email error
+                        return jsonify({
+                            'step': updated_step.to_dict(),
+                            'email_sent': False,
+                            'email_error': str(e)
+                        }), 200
+                
+                return jsonify(updated_step.to_dict()), 200
         
         if not step_found:
             return jsonify({'error': 'Onboarding step not found'}), 404
@@ -977,3 +1131,36 @@ def use_invitation(code):
         print(f"Error using invitation: {e}")
         print(traceback.format_exc())  # Print the full traceback for debugging
         return jsonify({"error": f"Failed to use invitation: {str(e)}"}), 500
+
+@api.route('/mandrill/templates', methods=['GET'])
+def get_mandrill_templates():
+    """Get all templates from Mandrill account."""
+    try:
+        # Get user from Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'error': 'Authorization required'}), 401
+        
+        # Extract and verify token
+        user_info = get_user_from_token(auth_header)
+        if not user_info:
+            return jsonify({'error': 'Invalid or expired token'}), 401
+        
+        # Only admins can get Mandrill templates
+        if not is_admin(user_info):
+            return jsonify({'error': 'Admin privileges required to access Mandrill templates'}), 403
+        
+        # Get templates from Mandrill
+        templates = mandrill_service.get_templates()
+        
+        # Return only the name and slug for each template
+        simplified_templates = [
+            {'name': template['name'], 'slug': template['slug']}
+            for template in templates
+        ]
+        
+        return jsonify(simplified_templates), 200
+        
+    except Exception as e:
+        print(f"Error getting Mandrill templates: {e}")
+        return jsonify({'error': f'Error getting Mandrill templates: {str(e)}'}), 500
