@@ -559,7 +559,7 @@ def get_company(company_id):
         response = {
             'id': company.id,
             'name': company.name,
-            'onboarding_steps': [step.to_dict() for step in company.onboarding_steps],
+            'onboarding_steps': company_data.get('onboarding_steps', []),  # Use raw Firestore data instead of model
             'created_at': company.created_at.isoformat() if company.created_at else None,
             'user_ids': company.user_ids,
             'user_is_admin': is_user_admin  # Include this flag for frontend to determine edit permissions

@@ -19,13 +19,19 @@ class OnboardingStep:
         name: str,
         description: str,
         status: OnboardingStatus = OnboardingStatus.TODO,
-        updated_at: Optional[datetime] = None
+        updated_at: Optional[datetime] = None,
+        donelink: Optional[str] = None,
+        clickable: bool = False,
+        doneText: Optional[str] = None
     ):
         self.id = id
         self.name = name
         self.description = description
         self.status = status
         self.updated_at = updated_at or datetime.now()
+        self.donelink = donelink
+        self.clickable = clickable
+        self.doneText = doneText
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'OnboardingStep':
@@ -40,18 +46,33 @@ class OnboardingStep:
             name=data.get('name', ''),
             description=data.get('description', ''),
             status=status,
-            updated_at=updated_at
+            updated_at=updated_at,
+            donelink=data.get('donelink'),
+            clickable=data.get('clickable', False),
+            doneText=data.get('doneText')
         )
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert OnboardingStep to dictionary for Firestore"""
-        return {
+        result = {
             'id': self.id,
             'name': self.name,
             'description': self.description,
             'status': self.status,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+        
+        # Only include optional fields if they have values
+        if self.donelink is not None:
+            result['donelink'] = self.donelink
+        
+        if self.clickable:
+            result['clickable'] = self.clickable
+            
+        if self.doneText is not None:
+            result['doneText'] = self.doneText
+            
+        return result
 
 class User:
     def __init__(
