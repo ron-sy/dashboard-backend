@@ -131,13 +131,19 @@ class Company:
         name: str,
         onboarding_steps: List[OnboardingStep] = None,
         created_at: Optional[datetime] = None,
-        user_ids: List[str] = None
+        user_ids: List[str] = None,
+        team_members: List[Dict[str, Any]] = None,
+        data_sharing: Dict[str, Any] = None,
+        output_library: Dict[str, Any] = None
     ):
         self.id = id
         self.name = name
         self.onboarding_steps = onboarding_steps or []
         self.created_at = created_at or datetime.now()
         self.user_ids = user_ids or []
+        self.team_members = team_members or []
+        self.data_sharing = data_sharing or {}
+        self.output_library = output_library or {'files': [], 'total_files': 0, 'total_size_bytes': 0}
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any], company_id: str) -> 'Company':
@@ -158,7 +164,10 @@ class Company:
             name=data.get('name', ''),
             onboarding_steps=steps,
             created_at=created_at,
-            user_ids=data.get('user_ids', [])
+            user_ids=data.get('user_ids', []),
+            team_members=data.get('team_members', []),
+            data_sharing=data.get('data_sharing', {}),
+            output_library=data.get('output_library', {'files': [], 'total_files': 0, 'total_size_bytes': 0})
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -167,7 +176,10 @@ class Company:
             'name': self.name,
             'onboarding_steps': [step.to_dict() for step in self.onboarding_steps],
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'user_ids': self.user_ids
+            'user_ids': self.user_ids,
+            'team_members': self.team_members,
+            'data_sharing': self.data_sharing,
+            'output_library': self.output_library
         }
 
 # Default onboarding steps template

@@ -56,12 +56,15 @@ def verify_token(id_token: str) -> Optional[Dict[str, Any]]:
     
     try:
         # First try to verify with Firebase Auth
+        print(f"Verifying token: {id_token[:20]}...")
         decoded_token = auth.verify_id_token(id_token)
-        print(f"Token verified for user: {decoded_token.get('email', 'unknown')}")
+        print(f"Token verified. User info:", json.dumps(decoded_token, indent=2))
         
         # Check if user exists in Firestore, if not create them
         user_id = decoded_token.get('uid')
         user_email = decoded_token.get('email')
+        print(f"Looking up user in Firestore - ID: {user_id}, Email: {user_email}")
+        
         if user_id and user_email:
             user_ref = db.collection('users').document(user_id)
             user_doc = user_ref.get()
@@ -77,10 +80,14 @@ def verify_token(id_token: str) -> Optional[Dict[str, Any]]:
                     'created_at': datetime.now().isoformat()
                 }
                 user_ref.set(user_data)
+            else:
+                print(f"Found existing user in Firestore:", json.dumps(user_doc.to_dict(), indent=2, default=str))
         
         return decoded_token
     except Exception as e:
-        print(f"Error verifying token: {e}")
+        print(f"Error verifying token: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def get_user_from_token(auth_header: str) -> Optional[Dict[str, Any]]:
@@ -562,7 +569,11 @@ def get_company(company_id):
             'onboarding_steps': company_data.get('onboarding_steps', []),  # Use raw Firestore data instead of model
             'created_at': company.created_at.isoformat() if company.created_at else None,
             'user_ids': company.user_ids,
-            'user_is_admin': is_user_admin  # Include this flag for frontend to determine edit permissions
+            'user_is_admin': is_user_admin,  # Include this flag for frontend to determine edit permissions
+            'team_members': company.team_members,
+            'data_sharing': company.data_sharing,
+            'output_library': company.output_library,
+            'aiagents': company_data.get('aiagents', [])  # Add aiagents field to response
         }
         
         return jsonify(response), 200
@@ -1164,3 +1175,262 @@ def get_mandrill_templates():
     except Exception as e:
         print(f"Error getting Mandrill templates: {e}")
         return jsonify({'error': f'Error getting Mandrill templates: {str(e)}'}), 500
+
+@api.route('/account/profile', methods=['GET'])
+def get_profile():
+    """Get user profile information."""
+    auth_header = request.headers.get('Authorization')
+    user_info = get_user_from_token(auth_header)
+    
+    if not user_info:
+        return jsonify({'error': 'Unauthorized access'}), 401
+    
+    try:
+        print("Getting profile for user:", json.dumps(user_info, indent=2))
+        
+        # Get user data from Firestore
+        user_ref = db.collection('users').document(user_info['uid'])
+        user_doc = user_ref.get()
+        
+        if not user_doc.exists:
+            print(f"User document not found for uid: {user_info['uid']}")
+            return jsonify({'error': 'User profile not found'}), 404
+            
+        user_data = user_doc.to_dict()
+        print("Raw Firestore user data:", json.dumps(user_data, indent=2, default=str))
+        
+        # Return the profile data in the expected format
+        profile_data = {
+            "display_name": user_data.get('display_name'),
+            "email": user_data.get('email'),
+            "role": user_data.get('role'),
+            "profile": user_data.get('profile', {})
+        }
+        
+        print("Returning profile data:", json.dumps(profile_data, indent=2, default=str))
+        return jsonify(profile_data), 200
+        
+    except Exception as e:
+        print(f"Error fetching profile: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/account/profile', methods=['PATCH'])
+def update_profile():
+    """Update user profile information."""
+    auth_header = request.headers.get('Authorization')
+    user_info = get_user_from_token(auth_header)
+    
+    if not user_info:
+        return jsonify({'error': 'Unauthorized access'}), 401
+    
+    try:
+        # Get the update data
+        update_data = request.get_json()
+        print("Update data received:", json.dumps(update_data, indent=2))
+        
+        # Get user reference
+        user_ref = db.collection('users').document(user_info['uid'])
+        
+        # Update the profile in Firestore
+        user_ref.set(update_data, merge=True)
+        
+        # Get and return the updated data
+        updated_doc = user_ref.get()
+        updated_data = updated_doc.to_dict()
+        
+        # Format the response data
+        formatted_data = {
+            "display_name": updated_data.get('display_name'),
+            "email": updated_data.get('email'),
+            "role": updated_data.get('role'),
+            "profile": updated_data.get('profile', {})
+        }
+        
+        print("Updated profile:", json.dumps(formatted_data, indent=2, default=str))
+        return jsonify(formatted_data), 200
+        
+    except Exception as e:
+        print(f"Error updating profile: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/account/billing', methods=['GET'])
+def get_billing():
+    """Get user billing information."""
+    auth_header = request.headers.get('Authorization')
+    user_info = get_user_from_token(auth_header)
+    
+    if not user_info:
+        return jsonify({'error': 'Unauthorized access'}), 401
+    
+    try:
+        print("Getting billing info for user:", json.dumps(user_info, indent=2))
+        
+        # Get user data from Firestore using same pattern as profile
+        user_ref = db.collection('users').document(user_info['uid'])
+        user_doc = user_ref.get()
+        
+        if not user_doc.exists:
+            print(f"User document not found for uid: {user_info['uid']}")
+            return jsonify({'error': 'User profile not found'}), 404
+            
+        user_data = user_doc.to_dict()
+        print("Raw Firestore user data:", json.dumps(user_data, indent=2, default=str))
+        
+        # Extract only billing-related data
+        billing_data = user_data.get('billing', {
+            'form_of_payment': 'credit',
+            'payment_transferred': 0,
+            'payment_due': 0,
+            'payment_remaining': 0,
+            'payment_history': []
+        })
+        
+        print("Returning billing data:", json.dumps(billing_data, indent=2, default=str))
+        return jsonify(billing_data), 200
+        
+    except Exception as e:
+        print(f"Error in get_billing: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/account/billing', methods=['PATCH'])
+def update_billing():
+    """Update user billing information."""
+    auth_header = request.headers.get('Authorization')
+    user_info = get_user_from_token(auth_header)
+    
+    if not user_info:
+        return jsonify({'error': 'Unauthorized access'}), 401
+    
+    try:
+        update_data = request.get_json()
+        print("Update data received:", json.dumps(update_data, indent=2))
+        
+        # Validate form_of_payment if provided
+        if 'form_of_payment' in update_data:
+            valid_payment_forms = ['credit', 'check', 'wire_transfer']
+            if update_data['form_of_payment'] not in valid_payment_forms:
+                return jsonify({'error': 'Invalid form of payment'}), 400
+        
+        # Get user reference
+        user_ref = db.collection('users').document(user_info['uid'])
+        user_doc = user_ref.get()
+        
+        if not user_doc.exists:
+            return jsonify({'error': 'User not found'}), 404
+            
+        current_data = user_doc.to_dict()
+        current_billing = current_data.get('billing', {})
+        
+        # Update billing data
+        billing_update = {
+            'billing': {
+                **current_billing,
+                **update_data,
+                'payment_remaining': (
+                    current_billing.get('payment_due', 0) - 
+                    current_billing.get('payment_transferred', 0)
+                )
+            }
+        }
+        
+        # Update the billing info in Firestore
+        user_ref.set(billing_update, merge=True)
+        
+        # Get and return the updated billing data
+        updated_doc = user_ref.get()
+        updated_data = updated_doc.to_dict()
+        billing_data = updated_data.get('billing', {})
+        
+        print("Updated billing info:", json.dumps(billing_data, indent=2, default=str))
+        return jsonify(billing_data), 200
+        
+    except Exception as e:
+        print(f"Error in update_billing: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/account/billing/payment', methods=['POST'])
+def add_payment():
+    """Add a new payment to the user's payment history."""
+    auth_header = request.headers.get('Authorization')
+    user_info = get_user_from_token(auth_header)
+    
+    if not user_info:
+        return jsonify({'error': 'Unauthorized access'}), 401
+    
+    try:
+        payment_data = request.get_json()
+        print("Payment data received:", json.dumps(payment_data, indent=2))
+        
+        # Validate required fields
+        if 'form_of_payment' not in payment_data or 'total' not in payment_data:
+            return jsonify({'error': 'form_of_payment and total are required'}), 400
+            
+        # Validate form_of_payment
+        valid_payment_forms = ['credit', 'check', 'wire_transfer']
+        if payment_data['form_of_payment'] not in valid_payment_forms:
+            return jsonify({'error': 'Invalid form of payment'}), 400
+            
+        # Validate total
+        if not isinstance(payment_data['total'], (int, float)) or payment_data['total'] < 0:
+            return jsonify({'error': 'Invalid payment total'}), 400
+        
+        # Get user reference
+        user_ref = db.collection('users').document(user_info['uid'])
+        user_doc = user_ref.get()
+        
+        if not user_doc.exists:
+            return jsonify({'error': 'User not found'}), 404
+            
+        current_data = user_doc.to_dict()
+        current_billing = current_data.get('billing', {})
+        
+        # Create new payment record with payment_id
+        new_payment = {
+            'payment_id': f"PAY-{uuid.uuid4().hex[:8].upper()}",  # Generate a random 8-character payment ID
+            'form_of_payment': payment_data['form_of_payment'],
+            'date_processed': datetime.now().isoformat(),
+            'total': payment_data['total']
+        }
+        
+        # Update payment history and totals
+        payment_history = current_billing.get('payment_history', [])
+        payment_history.append(new_payment)
+        
+        payment_transferred = current_billing.get('payment_transferred', 0) + payment_data['total']
+        payment_due = current_billing.get('payment_due', 0)
+        payment_remaining = payment_due - payment_transferred
+        
+        # Update billing data
+        billing_update = {
+            'billing': {
+                **current_billing,
+                'payment_transferred': payment_transferred,
+                'payment_remaining': payment_remaining,
+                'payment_history': payment_history
+            }
+        }
+        
+        # Update the billing info in Firestore
+        user_ref.set(billing_update, merge=True)
+        
+        # Get and return the updated billing data
+        updated_doc = user_ref.get()
+        updated_data = updated_doc.to_dict()
+        billing_data = updated_data.get('billing', {})
+        
+        print("Updated billing info:", json.dumps(billing_data, indent=2, default=str))
+        return jsonify(billing_data), 200
+        
+    except Exception as e:
+        print(f"Error in add_payment: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
