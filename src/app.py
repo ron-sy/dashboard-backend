@@ -9,6 +9,7 @@ import json
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.routes import api
 
+# Updated for GitHub Actions CI/CD integration - Automatic deployment
 # Load environment variables
 dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
 load_dotenv(dotenv_path)
