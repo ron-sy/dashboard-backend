@@ -1,0 +1,32 @@
+name: Test Cloud Run Deployment
+
+on:
+  workflow_dispatch:  # This allows manual triggering
+
+env:
+  PROJECT_ID: dashboard-backend-202503061144
+  SERVICE_NAME: dashboard-api
+  REGION: us-central1
+
+jobs:
+  test-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - id: 'auth'
+        name: Authenticate to Google Cloud
+        uses: 'google-github-actions/auth@v1'
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Test GCP CLI
+        run: |
+          gcloud projects list
+          gcloud run services list --platform managed --region $REGION --project $PROJECT_ID
+          echo "If you see your project and service listed above, authentication is working!" 
