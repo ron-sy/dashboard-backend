@@ -1,12 +1,43 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
-from routes import api
+import sys
 import os
 from dotenv import load_dotenv
+import json
+
+# Add the parent directory to sys.path to fix imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.routes import api
 
 # Load environment variables
 dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
 load_dotenv(dotenv_path)
+
+# Load secrets from GCP Secret Manager if in Cloud Run environment
+def load_gcp_secrets():
+    mandrill_api_key_path = os.getenv("MANDRILL_KEY_PATH")
+    firebase_credentials_path = os.getenv("FIREBASE_CREDS_PATH")
+    
+    if mandrill_api_key_path and os.path.exists(mandrill_api_key_path):
+        try:
+            with open(mandrill_api_key_path, 'r') as f:
+                mandrill_api_key = f.read().strip()
+                if mandrill_api_key.startswith('mandrill_api_key:'):
+                    mandrill_api_key = mandrill_api_key.split('mandrill_api_key:')[1].strip()
+                os.environ['MANDRILL_API_KEY'] = mandrill_api_key
+                print("Loaded Mandrill API key from GCP Secret Manager")
+        except Exception as e:
+            print(f"Error loading Mandrill API key from GCP Secret Manager: {e}")
+    
+    if firebase_credentials_path and os.path.exists(firebase_credentials_path):
+        try:
+            os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = firebase_credentials_path
+            print(f"Set GOOGLE_APPLICATION_CREDENTIALS to {firebase_credentials_path}")
+        except Exception as e:
+            print(f"Error setting GOOGLE_APPLICATION_CREDENTIALS: {e}")
+
+# Load GCP secrets if in Cloud Run environment
+load_gcp_secrets()
 
 def create_app():
     """Initialize and configure Flask application."""

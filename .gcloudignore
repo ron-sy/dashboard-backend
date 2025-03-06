@@ -1,0 +1,52 @@
+# .gcloudignore
+
+# Exclude Git files
+.git
+.gitignore
+
+# Python environment
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Development files
+.env
+*.log
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Firebase credentials (will be provided through Secret Manager)
+*firebase-adminsdk*.json
+
+# Docker related
+.dockerignore
+Dockerfile
+
+# Deployment scripts (not needed in the container)
+*.sh
+GCP-DEPLOYMENT.md
+
+# Tests
+tests/
+test_*.py 

@@ -1,0 +1,33 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.env
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Local development settings
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Firebase credentials (will be mounted separately)
+*-firebase-adminsdk-*.json
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db 

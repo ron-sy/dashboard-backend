@@ -8,12 +8,12 @@ from datetime import datetime, timedelta
 
 # Add the parent directory to sys.path to fix imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.firebase_config import db
-from models import Company, OnboardingStep, OnboardingStatus, DEFAULT_ONBOARDING_STEPS
-from models import User, UserRole
+from src.config.firebase_config import db
+from src.models import Company, OnboardingStep, OnboardingStatus, DEFAULT_ONBOARDING_STEPS
+from src.models import User, UserRole
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-from services import MandrillEmailService
+from src.services import MandrillEmailService
 
 # Create a Blueprint for API routes
 api = Blueprint('api', __name__)
