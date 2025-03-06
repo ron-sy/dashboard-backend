@@ -64,7 +64,7 @@ jobs:
             --project $PROJECT_ID \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars="FRONTEND_URL=https://app.syntheticteams.com,MANDRILL_API_KEY=md-2HbTGMACxIX4m9NlonorzA,FIREBASE_PROJECT_ID=dashboard-55056,GOOGLE_APPLICATION_CREDENTIALS=/secrets/firebase-credentials,FIREBASE_SERVICE_ACCOUNT=/secrets/firebase-credentials,MANDRILL_FROM_EMAIL=ron@syntheticteams.com,MANDRILL_FROM_NAME=Synthetic Teams" \
+            --update-env-vars="FRONTEND_URL=https://app.syntheticteams.com,MANDRILL_API_KEY=${{ secrets.MANDRILL_API_KEY }}" \
             --set-secrets="/secrets/firebase-credentials=firebase-credentials:latest"
 
       - name: Verify deployment
