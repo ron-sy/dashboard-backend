@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:  # Allow manual triggering
 
 env:
   PROJECT_ID: dashboard-backend-202503061144  # Your GCP Project ID
@@ -37,19 +38,38 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
+      - name: Verify dependencies
+        run: |
+          gcloud --version
+          docker --version
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Authorize Docker push
         run: gcloud auth configure-docker $REGION-docker.pkg.dev
 
       - name: Build and push container
         run: |
+          echo "Building and pushing container image..."
           docker buildx build --platform linux/amd64 -t $REGION-docker.pkg.dev/$PROJECT_ID/dashboard-repo/dashboard-backend:${{ github.sha }} . --push
+          echo "Image pushed successfully!"
 
       - name: Deploy to Cloud Run
         run: |
+          echo "Deploying to Cloud Run..."
           gcloud run deploy $SERVICE_NAME \
             --image $REGION-docker.pkg.dev/$PROJECT_ID/dashboard-repo/dashboard-backend:${{ github.sha }} \
             --region $REGION \
             --project $PROJECT_ID \
             --platform managed \
+            --allow-unauthenticated \
             --set-env-vars="FRONTEND_URL=https://app.syntheticteams.com,MANDRILL_API_KEY=md-2HbTGMACxIX4m9NlonorzA,FIREBASE_PROJECT_ID=dashboard-55056,GOOGLE_APPLICATION_CREDENTIALS=/secrets/firebase-credentials,FIREBASE_SERVICE_ACCOUNT=/secrets/firebase-credentials,MANDRILL_FROM_EMAIL=ron@syntheticteams.com,MANDRILL_FROM_NAME=Synthetic Teams" \
-            --set-secrets="/secrets/firebase-credentials=firebase-credentials:latest" 
+            --set-secrets="/secrets/firebase-credentials=firebase-credentials:latest"
+
+      - name: Verify deployment
+        run: |
+          echo "Verifying deployment..."
+          SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --platform managed --region $REGION --format 'value(status.url)')
+          echo "Service URL: $SERVICE_URL"
+          curl -s "$SERVICE_URL/health" | grep -q "ok" && echo "Deployment successful! Health check passed." || echo "Deployment may have issues. Health check failed." 
