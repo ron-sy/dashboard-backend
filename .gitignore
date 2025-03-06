@@ -103,3 +103,8 @@ venv.bak/
 # Google Cloud service account keys
 *-6b33618a2530.json
 dashboard-55056-6b33618a2530.json
+
+# Sensitive files
+firebase-sa-key.json
+*.json.key
+
