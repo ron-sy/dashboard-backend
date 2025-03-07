@@ -129,57 +129,53 @@ class Company:
         self,
         id: str,
         name: str,
-        onboarding_steps: List[OnboardingStep] = None,
         created_at: Optional[datetime] = None,
         user_ids: List[str] = None,
-        team_members: List[Dict[str, Any]] = None,
-        data_sharing: Dict[str, Any] = None,
-        output_library: Dict[str, Any] = None
+        data_sharing: Optional[Dict[str, Any]] = None,
+        output_library: Optional[Dict[str, Any]] = None,
+        team_members: List[Dict[str, Any]] = None
     ):
         self.id = id
         self.name = name
-        self.onboarding_steps = onboarding_steps or []
         self.created_at = created_at or datetime.now()
         self.user_ids = user_ids or []
-        self.team_members = team_members or []
         self.data_sharing = data_sharing or {}
         self.output_library = output_library or {'files': [], 'total_files': 0, 'total_size_bytes': 0}
+        self.team_members = team_members or []
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], company_id: str) -> 'Company':
+    def from_dict(cls, data: Dict[str, Any], id: str = None) -> 'Company':
         """Create Company from Firestore document data"""
-        steps = []
-        steps_data = data.get('onboarding_steps', [])
         
-        if isinstance(steps_data, list):
-            for step_data in steps_data:
-                steps.append(OnboardingStep.from_dict(step_data))
-        
+        # Parse created_at timestamp
         created_at = data.get('created_at')
-        if created_at and isinstance(created_at, str):
-            created_at = datetime.fromisoformat(created_at)
+        if created_at:
+            if isinstance(created_at, str):
+                created_at = datetime.fromisoformat(created_at)
+        else:
+            created_at = datetime.now()
         
+        # Create instance
         return cls(
-            id=company_id,
+            id=id or data.get('id', ''),
             name=data.get('name', ''),
-            onboarding_steps=steps,
             created_at=created_at,
             user_ids=data.get('user_ids', []),
-            team_members=data.get('team_members', []),
             data_sharing=data.get('data_sharing', {}),
-            output_library=data.get('output_library', {'files': [], 'total_files': 0, 'total_size_bytes': 0})
+            output_library=data.get('output_library', {'files': [], 'total_files': 0, 'total_size_bytes': 0}),
+            team_members=data.get('team_members', [])
         )
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert Company to dictionary for Firestore"""
         return {
+            'id': self.id,
             'name': self.name,
-            'onboarding_steps': [step.to_dict() for step in self.onboarding_steps],
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'user_ids': self.user_ids,
-            'team_members': self.team_members,
             'data_sharing': self.data_sharing,
-            'output_library': self.output_library
+            'output_library': self.output_library,
+            'team_members': self.team_members
         }
 
 # Default onboarding steps template

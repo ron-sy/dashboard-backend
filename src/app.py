@@ -7,13 +7,30 @@ import json
 
 # Add the parent directory to sys.path to fix imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Debug prints for environment setup
+print("\n=== DEBUG: Environment Setup ===")
+print(f"Current working directory: {os.getcwd()}")
+print(f"__file__ path: {__file__}")
+print(f"Parent directory: {os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}")
+
+# Load environment variables
+dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+print(f"Looking for .env at path: {dotenv_path}")
+print(f"Does .env exist? {os.path.exists(dotenv_path)}")
+load_dotenv(dotenv_path)
+
+# Print environment variables
+print("\n=== DEBUG: Environment Variables ===")
+print(f"MANDRILL_API_KEY present: {'MANDRILL_API_KEY' in os.environ}")
+if 'MANDRILL_API_KEY' in os.environ:
+    key = os.environ['MANDRILL_API_KEY']
+    print(f"MANDRILL_API_KEY value: {key[:4]}...{key[-4:]}")
+print("=====================================\n")
+
 from src.routes import api
 
 # Updated for GitHub Actions CI/CD integration - Automatic deployment
-# Load environment variables
-dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
-load_dotenv(dotenv_path)
-
 # Load secrets from GCP Secret Manager if in Cloud Run environment
 def load_gcp_secrets():
     mandrill_api_key_path = os.getenv("MANDRILL_KEY_PATH")

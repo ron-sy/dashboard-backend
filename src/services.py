@@ -8,11 +8,25 @@ class MandrillEmailService:
     
     def __init__(self, api_key: str = None):
         """Initialize the Mandrill email service with the API key."""
+        print("\n=== MANDRILL SERVICE INITIALIZATION ===")
+        print(f"API Key provided directly: {bool(api_key)}")
+        print(f"API Key in environment: {bool(os.environ.get('MANDRILL_API_KEY'))}")
+        if os.environ.get('MANDRILL_API_KEY'):
+            print(f"Environment API key length: {len(os.environ.get('MANDRILL_API_KEY'))}")
+            print(f"Environment API key format: {repr(os.environ.get('MANDRILL_API_KEY'))}")
+        
         self.api_key = api_key or os.environ.get('MANDRILL_API_KEY')
         if not self.api_key:
             raise ValueError("Mandrill API key is required")
+            
+        # Clean the API key
+        self.api_key = self.api_key.strip()
+        print(f"Final API key length: {len(self.api_key)}")
+        print(f"Final API key format: {repr(self.api_key)}")
+        
         self.base_url = "https://mandrillapp.com/api/1.0"
         print(f"MandrillEmailService initialized with API key: {self.api_key[:4]}...{self.api_key[-4:]}")
+        print("=====================================\n")
     
     def get_templates(self) -> List[Dict[str, Any]]:
         """Get all templates from Mandrill account."""
