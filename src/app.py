@@ -63,10 +63,15 @@ def create_app():
     
     # Enable CORS for frontend with proper configuration
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    print(f"Configuring CORS to allow requests from: {frontend_url}")
+    allowed_origins = [
+        frontend_url, 
+        "https://app.syntheticteams.com",
+        "https://dashboard-55056.web.app"
+    ]
+    print(f"Configuring CORS to allow requests from: {allowed_origins}")
     CORS(app, 
          resources={r"/*": {
-             "origins": [frontend_url],
+             "origins": allowed_origins,
              "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
              "allow_headers": ["Content-Type", "Authorization", "Accept"],
              "expose_headers": ["Content-Type", "Authorization"],
