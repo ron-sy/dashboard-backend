@@ -108,3 +108,60 @@ dashboard-55056-6b33618a2530.json
 firebase-sa-key.json
 *.json.key
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+
+# Flask
+instance/
+.webassets-cache
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Operating system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Firebase
+firebase-debug.log
+ui-debug.log
+
+# Credentials and sensitive files
+*-sa-key.json
+gcp-sa-key.json
+firebase-sa-key.json
+*.pem
+.env
+.env.local
+
