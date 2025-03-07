@@ -58,6 +58,14 @@ jobs:
       - name: Deploy to Cloud Run
         run: |
           echo "Deploying to Cloud Run..."
+          # First, remove the existing environment variable
+          gcloud run services update $SERVICE_NAME \
+            --region $REGION \
+            --project $PROJECT_ID \
+            --remove-env-vars="MANDRILL_API_KEY" \
+            || echo "No environment variable to remove, continuing..."
+          
+          # Now deploy with the updated configuration
           gcloud run deploy $SERVICE_NAME \
             --image $REGION-docker.pkg.dev/$PROJECT_ID/dashboard-repo/dashboard-backend:${{ github.sha }} \
             --region $REGION \
