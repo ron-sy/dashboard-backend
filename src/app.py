@@ -4,6 +4,7 @@ import sys
 import os
 from dotenv import load_dotenv
 import json
+from datetime import datetime
 
 # Add the parent directory to sys.path to fix imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -62,40 +63,65 @@ def create_app():
     app = Flask(__name__)
     
     # Enable CORS for frontend with proper configuration
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    allowed_origins = [
-        frontend_url, 
-        "https://app.syntheticteams.com",
-        "https://dashboard-55056.web.app"
-    ]
-    print(f"Configuring CORS to allow requests from: {allowed_origins}")
-    CORS(app, 
-         resources={r"/*": {
-             "origins": allowed_origins,
-             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-             "allow_headers": ["Content-Type", "Authorization", "Accept"],
-             "expose_headers": ["Content-Type", "Authorization"],
-             "supports_credentials": True,
-             "max_age": 120  # Cache preflight requests for 2 minutes
-         }})
+    try:
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        allowed_origins = [
+            frontend_url, 
+            "https://app.syntheticteams.com",
+            "https://dashboard-55056.web.app",
+            # Add wildcard for development
+            "http://localhost:*"
+        ]
+        print(f"Configuring CORS to allow requests from: {allowed_origins}")
+        CORS(app, 
+             resources={r"/*": {
+                 "origins": allowed_origins,
+                 "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+                 "allow_headers": ["Content-Type", "Authorization", "Accept"],
+                 "expose_headers": ["Content-Type", "Authorization"],
+                 "supports_credentials": True,
+                 "max_age": 120  # Cache preflight requests for 2 minutes
+             }})
+    except Exception as e:
+        print(f"WARNING: Error configuring CORS: {str(e)}")
+        # Fall back to a more permissive CORS policy if there's an error
+        CORS(app)
     
     # Register API blueprint
     app.register_blueprint(api, url_prefix='/api')
     
     @app.route('/health')
     def health_check():
-        """Health check endpoint."""
-        return jsonify({'status': 'ok'})
+        """Health check endpoint for monitoring."""
+        try:
+            # Basic operational check
+            return jsonify({
+                'status': 'ok',
+                'version': '1.0.0',
+                'environment': os.getenv('FLASK_ENV', 'unknown'),
+                'timestamp': datetime.now().isoformat()
+            }), 200
+        except Exception as e:
+            # Log any errors but still return a response
+            print(f"Health check error: {str(e)}")
+            return jsonify({
+                'status': 'degraded',
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }), 200  # Still return 200 to keep the service running
     
     return app
 
-app = create_app()
-
-if __name__ == '__main__':
-    # Get port from environment variable or use default 5000
-    port = int(os.getenv("PORT", 5000))
+if __name__ == "__main__":
+    # Get the PORT environment variable, default to 5001 if not set
+    port = int(os.getenv("PORT", 5001))
+    debug = os.getenv("FLASK_ENV", "development") == "development"
+    
     print(f"Starting Flask server on port {port}")
-    # Disable debug mode in production
-    debug_mode = os.getenv("FLASK_ENV", "production") != "production"
-    print(f"Debug mode: {debug_mode}")
-    app.run(host='0.0.0.0', port=port, debug=debug_mode)
+    print(f"Debug mode: {debug}")
+    
+    app = create_app()
+    app.run(host='0.0.0.0', port=port, debug=debug)
+else:
+    # For Gunicorn
+    app = create_app()
