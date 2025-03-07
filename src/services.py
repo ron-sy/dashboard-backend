@@ -11,13 +11,20 @@ class MandrillEmailService:
         print("\n=== MANDRILL SERVICE INITIALIZATION ===")
         print(f"API Key provided directly: {bool(api_key)}")
         print(f"API Key in environment: {bool(os.environ.get('MANDRILL_API_KEY'))}")
+        
+        self.enabled = False
+        
+        # Try to get API key
+        self.api_key = api_key or os.environ.get('MANDRILL_API_KEY')
+        if not self.api_key:
+            print("WARNING: Mandrill API key not found. Email functionality will be disabled.")
+            print("=====================================\n")
+            return
+            
+        # If we have an API key, proceed with initialization
         if os.environ.get('MANDRILL_API_KEY'):
             print(f"Environment API key length: {len(os.environ.get('MANDRILL_API_KEY'))}")
             print(f"Environment API key format: {repr(os.environ.get('MANDRILL_API_KEY'))}")
-        
-        self.api_key = api_key or os.environ.get('MANDRILL_API_KEY')
-        if not self.api_key:
-            raise ValueError("Mandrill API key is required")
             
         # Clean the API key
         self.api_key = self.api_key.strip()
@@ -26,10 +33,15 @@ class MandrillEmailService:
         
         self.base_url = "https://mandrillapp.com/api/1.0"
         print(f"MandrillEmailService initialized with API key: {self.api_key[:4]}...{self.api_key[-4:]}")
+        self.enabled = True
         print("=====================================\n")
     
     def get_templates(self) -> List[Dict[str, Any]]:
         """Get all templates from Mandrill account."""
+        if not self.enabled:
+            print("WARNING: Mandrill service not enabled. Cannot get templates.")
+            return []
+            
         endpoint = f"{self.base_url}/templates/list.json"
         payload = {"key": self.api_key}
         
@@ -77,17 +89,21 @@ class MandrillEmailService:
         Send an email using a Mandrill template.
         
         Args:
-            template_name: The name of the template to use
+            template_name: The name of the template in Mandrill
             subject: Email subject
             from_email: Sender email address
             from_name: Sender name
             to_emails: List of recipient dictionaries with 'email' and 'name' keys
-            merge_vars: Template merge variables specific to each recipient
-            global_merge_vars: Template merge variables for all recipients
+            merge_vars: List of dictionaries with recipient-specific merge variables
+            global_merge_vars: List of dictionaries with global merge variables
             
         Returns:
             List of response dictionaries from Mandrill API
         """
+        if not self.enabled:
+            print("WARNING: Mandrill service not enabled. Cannot send email.")
+            return []
+            
         endpoint = f"{self.base_url}/messages/send-template.json"
         
         # Prepare the payload

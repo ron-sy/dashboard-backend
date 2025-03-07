@@ -64,8 +64,8 @@ jobs:
             --project $PROJECT_ID \
             --platform managed \
             --allow-unauthenticated \
-            --update-env-vars="FRONTEND_URL=https://app.syntheticteams.com,MANDRILL_API_KEY=${{ secrets.MANDRILL_API_KEY }}" \
-            --set-secrets="/secrets/firebase-credentials=firebase-credentials:latest"
+            --update-env-vars="FRONTEND_URL=https://app.syntheticteams.com" \
+            --set-secrets="MANDRILL_API_KEY=mandrill-api-key:latest,/secrets/firebase-credentials=firebase-credentials:latest"
 
       - name: Verify deployment
         run: |

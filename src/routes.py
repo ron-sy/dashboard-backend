@@ -23,7 +23,13 @@ api = Blueprint('api', __name__)
 DEV_MODE = False
 
 # Initialize Mandrill email service
-mandrill_service = MandrillEmailService()
+try:
+    mandrill_service = MandrillEmailService()
+    print("Mandrill service initialized successfully")
+except Exception as e:
+    print(f"WARNING: Failed to initialize Mandrill service: {str(e)}")
+    # Create a disabled instance that won't break the app
+    mandrill_service = MandrillEmailService(api_key="dummy_key_that_wont_be_used")
 
 # Mock users for development mode
 MOCK_USERS = {
