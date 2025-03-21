@@ -9,27 +9,29 @@ class MandrillEmailService:
     def __init__(self, api_key: str = None):
         """Initialize the Mandrill email service with the API key."""
         print("\n=== MANDRILL SERVICE INITIALIZATION ===")
-        print(f"API Key provided directly: {bool(api_key)}")
-        print(f"API Key in environment: {bool(os.environ.get('MANDRILL_API_KEY'))}")
         
         self.enabled = False
         
-        # Try to get API key
-        self.api_key = api_key or os.environ.get('MANDRILL_API_KEY')
+        # First check if API key was provided directly
+        if api_key:
+            self.api_key = api_key
+            print(f"Using provided API key: {self.api_key[:4]}...{self.api_key[-4:]}")
+        else:
+            # Otherwise try to get it from environment
+            print(f"API Key in environment: {bool(os.environ.get('MANDRILL_API_KEY'))}")
+            self.api_key = os.environ.get('MANDRILL_API_KEY')
+            if self.api_key:
+                print(f"Using environment API key: {self.api_key[:4]}...{self.api_key[-4:]}")
+            
+        # Check if we have a valid API key
         if not self.api_key:
             print("WARNING: Mandrill API key not found. Email functionality will be disabled.")
             print("=====================================\n")
             return
             
-        # If we have an API key, proceed with initialization
-        if os.environ.get('MANDRILL_API_KEY'):
-            print(f"Environment API key length: {len(os.environ.get('MANDRILL_API_KEY'))}")
-            print(f"Environment API key format: {repr(os.environ.get('MANDRILL_API_KEY'))}")
-            
         # Clean the API key
         self.api_key = self.api_key.strip()
         print(f"Final API key length: {len(self.api_key)}")
-        print(f"Final API key format: {repr(self.api_key)}")
         
         self.base_url = "https://mandrillapp.com/api/1.0"
         print(f"MandrillEmailService initialized with API key: {self.api_key[:4]}...{self.api_key[-4:]}")

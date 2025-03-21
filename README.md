@@ -9,6 +9,7 @@ A Flask-based backend API for the dashboard application with Firebase Authentica
 - Company management
 - Onboarding progress tracking
 - Firestore database integration
+- Email notifications via Mandrill
 
 ## Setup
 
@@ -33,19 +34,43 @@ A Flask-based backend API for the dashboard application with Firebase Authentica
      gcloud auth application-default set-quota-project YOUR_PROJECT_ID
      ```
 
-5. Create a `.env` file with the following variables:
+5. Create a `.env` file based on `.env.example`:
+   ```
+   cp .env.example .env
+   ```
+   
+   Then edit the `.env` file with your actual credentials:
    ```
    PORT=5001
-   FLASK_ENV=production
+   FLASK_ENV=development
    FRONTEND_URL=http://localhost:3000
-   FIREBASE_PROJECT_ID=your_firebase_project_id
-   FIREBASE_USE_EMULATOR=false
+   FIREBASE_SERVICE_ACCOUNT=firebase-sa-key.json
+   GOOGLE_APPLICATION_CREDENTIALS=firebase-sa-key.json
+   MANDRILL_API_KEY=your-mandrill-api-key  # Keep this secure!
+   MANDRILL_FROM_EMAIL=your-sender-email
+   MANDRILL_FROM_NAME=Your Name or Company
    ```
+
+   **IMPORTANT: Never commit your .env file to version control!**
 
 6. Start the server:
    ```
-   python src/app.py
+   python -m src.app
    ```
+
+## Security Best Practices
+
+### Handling Sensitive Credentials
+
+- **Local Development**: Use `.env` file (already in `.gitignore`)
+- **Production Deployment**: Use Google Cloud Secret Manager
+- **CI/CD Pipeline**: 
+  - The GitHub Actions workflow is configured to use secrets from Google Cloud Secret Manager
+  - The workflow automatically removes any environment variables and sets them using the `--set-secrets` flag
+
+### Authentication Security
+- All Firebase tokens are validated on every request
+- Application uses service-to-service authentication for Google Cloud services
 
 ## API Endpoints
 
@@ -66,9 +91,37 @@ A Flask-based backend API for the dashboard application with Firebase Authentica
 - `GET /api/companies/:id/onboarding` - Get onboarding steps for a company
 - `PUT /api/companies/:id/onboarding/:step_id` - Update an onboarding step
 
+## Deployment
+
+### Google Cloud Run
+
+The application is deployed to Google Cloud Run using GitHub Actions. The workflow:
+1. Builds a Docker container
+2. Pushes the container to Google Container Registry
+3. Deploys the container to Cloud Run with proper secrets management
+
+To deploy manually:
+```
+# Authenticate with Google Cloud
+gcloud auth login
+
+# Make sure you're in the project directory
+cd dashboard-backend
+
+# Deploy to Cloud Run 
+gcloud run deploy dashboard-api \
+  --source . \
+  --region us-central1 \
+  --platform managed \
+  --allow-unauthenticated \
+  --update-env-vars="FRONTEND_URL=https://app.syntheticteams.com" \
+  --set-secrets="MANDRILL_API_KEY=mandrill-api-key:latest,/secrets/firebase-credentials=firebase-credentials:latest"
+```
+
 ## Technologies Used
 
 - Python
 - Flask
 - Firebase Admin SDK
-- Firestore 
+- Firestore
+- Mandrill (email service) 

@@ -22,14 +22,22 @@ api = Blueprint('api', __name__)
 # Always use production Firebase, never use development mode
 DEV_MODE = False
 
-# Initialize Mandrill email service
+# Initialize Mandrill email service with API key from environment variables
 try:
-    mandrill_service = MandrillEmailService()
-    print("Mandrill service initialized successfully")
+    api_key = os.environ.get('MANDRILL_API_KEY')
+    if not api_key:
+        print("WARNING: MANDRILL_API_KEY not found in environment variables")
+        # Create a disabled instance that won't break the app
+        mandrill_service = MandrillEmailService(api_key="dummy_key_that_wont_be_used")
+        print("Created disabled Mandrill service instance")
+    else:
+        mandrill_service = MandrillEmailService(api_key=api_key)
+        print(f"Mandrill service initialized successfully")
 except Exception as e:
     print(f"WARNING: Failed to initialize Mandrill service: {str(e)}")
     # Create a disabled instance that won't break the app
     mandrill_service = MandrillEmailService(api_key="dummy_key_that_wont_be_used")
+    print("Created disabled Mandrill service instance due to exception")
 
 # Mock users for development mode
 MOCK_USERS = {
@@ -95,8 +103,8 @@ def create_empty_profile():
                 'last_password_change': datetime.now().isoformat(),
                 'login_history': []
             }
-        }
     }
+}
 
 def verify_token(id_token: str) -> Optional[Dict[str, Any]]:
     """Verify Firebase ID token and return user info."""
@@ -772,8 +780,8 @@ def update_onboarding_step(company_id, step_id):
         
         # Update the company document
         company_ref.update({'onboarding_steps': updated_steps})
-        
-        # Send email notification if requested
+                
+                # Send email notification if requested
         email_warning = None
         recipients_count = 0
         
@@ -794,7 +802,7 @@ def update_onboarding_step(company_id, step_id):
             response['recipients_count'] = recipients_count
         
         return jsonify(response), 200
-        
+            
     except Exception as e:
         print(f"Error updating onboarding step: {e}")
         traceback.print_exc()

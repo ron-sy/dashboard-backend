@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Proposal Analyst",
+    "purpose": "Accepts RFI text documents as input and returns Proposal excel sheets as output",
+    "status": "ready",
+    "output": "https://storage.googleapis.com/synthetic-teams/output/proposal_output.xlsx",
+    "input": "https://storage.googleapis.com/synthetic-teams/input/rfi_document.pdf",
+    "training_time": 7
+  },
+  {
+    "name": "Specbook Specialist",
+    "purpose": "Accepts a spec from a client, turns it into a submittal log and submittal file",
+    "status": "ready",
+    "output": "https://storage.googleapis.com/synthetic-teams/output/submittal_log.xlsx",
+    "input": "https://storage.googleapis.com/synthetic-teams/input/client_spec.pdf",
+    "training_time": 5
+  },
+  {
+    "name": "Form Processor",
+    "purpose": "Makes sure the on-site team fills out all of the required forms every day",
+    "status": "ready",
+    "output": "https://storage.googleapis.com/synthetic-teams/output/daily_forms.pdf",
+    "input": "https://storage.googleapis.com/synthetic-teams/input/form_template.docx",
+    "training_time": 3
+  }
+]
